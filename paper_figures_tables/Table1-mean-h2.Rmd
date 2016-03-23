@@ -1,0 +1,133 @@
+---
+title: "Table1-mean-h2"
+author: "Heather Wheeler"
+date: "`r Sys.time()`"
+output: html_document
+---
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+  library(ggplot2)
+  library(reshape2)
+  library(dplyr)
+  library(tidyr)
+  library(GGally)
+  library(grid)
+  "%&%" = function(a,b) paste(a,b,sep="")
+  se <- function(x) sqrt(var(x,na.rm=TRUE)/length(is.na(x)==FALSE))
+  source('/Volumes/im-lab/nas40t2/hwheeler/PrediXcan_CV/GTEx_2014-06013_release/transfers/PrediXmod/Paper_plots/multiplot.R')
+  my.dir <- '/Volumes/im-lab/nas40t2/hwheeler/cross-tissue/'
+  fig.dir <- '~/GitHub/GenArch/GenArchPaper/Figures/'
+  rna.dir <- my.dir %&% "gtex-rnaseq/"
+  annot.dir <- my.dir %&% "gtex-annot/"
+  out.dir <- rna.dir %&% "ind-tissues-RPKM/"
+```
+
+```{r, loc.jt.tw,eval=TRUE,fig.width=8,fig.height=8}
+dgn <- read.table(my.dir %&% 'expArch_DGN-WB_imputedGTs/DGN-WB.h2.all.models_FHSfdr0.05.Chr1-22_globalAll_reml-no-constrain.2015-12-15.txt',header=T)
+tislist <- scan(my.dir %&% 'gtex-rnaseq/ind-tissues-from-nick/GTEx_PrediXmod.tissue.list',sep="\n",what="character")
+tisspacelist <- scan(my.dir %&% '40.tissue.list',sep="\n",what="character")
+table1 <- matrix(0,nrow=length(tislist)+2,ncol=6)
+n <- dgn$N[1]
+numexpgenes <- dim(dgn)[1] 
+meanh2 <- sprintf("%.3f",mean(dgn$loc.jt.h2,na.rm=TRUE))
+semean <- sprintf("%.4f",se(dgn$loc.jt.h2))
+meanandse <- meanh2 %&% " (" %&% semean %&% ")"
+#pest <-  dgn %>% mutate(loc.jt.P=ifelse(loc.jt.h2 > 0, 2*pnorm(-abs(loc.jt.h2/loc.jt.se)),1))  %>% arrange(loc.jt.h2) %>% mutate(Plt05=loc.jt.P<0.05) 
+pest <-  dgn %>% mutate(loc.jt.P=2*pnorm(-abs(loc.jt.h2/loc.jt.se)))  %>% arrange(loc.jt.h2) %>% mutate(Plt05=loc.jt.P<0.05)
+propsig <- sprintf("%.1f",table(pest$Plt05)[2]/sum(table(pest$Plt05,useNA="i"))*100)
+numsig <- table(pest$Plt05)[2]
+table1[1,] <- c("DGN Whole Blood",n,meanandse,propsig,numsig,numexpgenes)
+
+#add cross-tissue to table 1
+ct <- read.table(my.dir %&% 'cross-tissue.h2.all.models_FHSfdr0.05.Chr1-22_globaleQTLOtherChr_reml-no-constrain.2015-12-14.txt',header=T)
+n <- ct$N[1]
+numexpgenes <- dim(ct)[1] 
+meanh2 <- sprintf("%.3f",mean(ct$local.h2,na.rm=TRUE))
+semean <- sprintf("%.4f",se(ct$local.h2))
+meanandse <- meanh2 %&% " (" %&% semean %&% ")"
+pest <-  ct %>% mutate(local.p=ifelse(is.na(local.p),1,local.p)) %>% arrange(local.h2) %>% mutate(Plt05=local.p<0.05)
+propsig <- sprintf("%.1f",table(pest$Plt05)[2]/sum(table(pest$Plt05,useNA="i"))*100)
+numsig <- table(pest$Plt05)[2]
+table1[2,] <- c("Cross-tissue",n,meanandse,propsig,numsig,numexpgenes)
+
+##calc mean global for DGN
+signif(mean(dgn$loc.jt.h2,na.rm=TRUE),3)
+signif(se(dgn$loc.jt.h2),3)
+signif(mean(dgn$glo.jt.h2,na.rm=TRUE),3)
+signif(se(dgn$glo.jt.h2),3)
+#pest <-  dgn %>% mutate(glo.jt.P=ifelse(glo.jt.h2 > 0, 2*pnorm(-abs(glo.jt.h2/glo.jt.se)),1))  %>% arrange(glo.jt.h2) %>% mutate(Plt05=glo.jt.P<0.05) 
+pest <-  dgn %>% mutate(glo.jt.P=2*pnorm(-abs(glo.jt.h2/glo.jt.se)))  %>% arrange(glo.jt.h2) %>% mutate(Plt05=glo.jt.P<0.05) 
+propsig <- table(pest$Plt05)[2]/sum(table(pest$Plt05,useNA="i"))*100
+propsig
+table(pest$Plt05,useNA="i")
+##prop loc
+signif(mean(dgn$loc.jt.h2,na.rm=TRUE),3)/(signif(mean(dgn$loc.jt.h2,na.rm=TRUE),3)+signif(mean(dgn$glo.jt.h2,na.rm=TRUE),3))
+
+for(i in 1:length(tislist)){
+  tis <- tislist[i]
+  data <- read.table(my.dir %&% 'GTEx.TW.' %&% tis  %&% '.h2.all.models_FHSfdr0.05.Chr1-22_globaleQTLOtherChr_reml-no-constrain.2015-12-14.txt',header=T,sep="\t")  
+  explist <- scan(out.dir %&% tis %&% ".meanRPKMgt0.1_3samplesRPKMgt0_genelist","c")
+  data <- dplyr::filter(data,ensid %in% explist)
+  n <- data$N[1]
+  numexpgenes <- dim(data)[1] ##num expressed genes mean(RPKM)>0.1
+  meanh2 <- sprintf("%.3f",mean(data$local.h2,na.rm=TRUE))
+  semean <- sprintf("%.4f",se(data$local.h2))
+  pest <-  data %>% mutate(local.p=ifelse(is.na(local.p),1,local.p)) %>% arrange(local.h2) %>% mutate(Plt05=local.p<0.05) 
+  propsig <- sprintf("%.1f",table(pest$Plt05)[2]/sum(table(pest$Plt05,useNA="i"))*100)
+  numsig <- table(pest$Plt05)[2]
+  tisspace <- tisspacelist[i]
+  meanandse <- meanh2 %&% " (" %&% semean %&% ")"
+  tableinfo <- c(tisspace,n,meanandse,propsig,numsig,numexpgenes)
+  table1[i+2,] <- tableinfo
+}
+colnames(table1)=c("tissue","n","mean h2 (SE)","% P<0.05","num P<0.05","num expressed")
+#table1
+
+library(xtable)
+tab <- xtable(table1)
+print(tab, type="latex",include.rownames=FALSE)
+```
+
+
+###Calculate num expressed genes and make lists per tissue for filtering
+- Expressed: mean RPKM > 0.1 and at least 3 samples with RPKM > 0 
+```{r,eval=FALSE}
+tislist <- scan(my.dir %&% 'tissue.list',sep="\n",what="character")
+
+expidlist <- scan(rna.dir %&% "GTEx_Analysis_2014-06-13.RNA-seq.ID.list","character")
+expgenelist <- scan(rna.dir %&% "GTEx_Analysis_2014-06-13.RNA-seq.GENE.list","character")
+exp <- readRDS(rna.dir %&% "GTEx_Analysis_2014-06-13.RNA-seq.GENExID.RDS")
+expdata <- matrix(exp, ncol=length(expidlist), byrow=T)
+t.expdata <- t(expdata)
+rownames(t.expdata) <- expidlist
+colnames(t.expdata) <- expgenelist
+
+gencodefile <- annot.dir %&% "gencode.v18.genes.patched_contigs.summary.protein"
+gencode <- read.table(gencodefile)
+rownames(gencode) <- gencode[,5]
+t.expdata <- t.expdata[,intersect(colnames(t.expdata),rownames(gencode))] ###pull protein coding gene expression data
+
+sam <- read.table(annot.dir %&% "GTEx_Analysis_2014-06-13.SampleTissue.annot",header=T,sep="\t")
+
+for(i in 1:length(tislist)){
+  tissue <- tislist[i]
+  tis<- gsub(' ','',tissue) ##removes all whitespace to match .RDS files
+  sample <- subset(sam,SMTSD == tissue) ### pull sample list of chosen tissue
+  tissue.exp <- t.expdata[intersect(rownames(t.expdata),sample$SAMPID),] ###pull expression data for chosen tissue###
+  tissue.exp <- t(tissue.exp) #for merging in R
+  
+  explist <- subset(rowMeans(tissue.exp), rowMeans(tissue.exp)>0.1) ###pull genes with mean expression > 0.1###
+  explist <- names(explist)
+  nz.expdata <- tissue.exp[explist,]
+
+  #calc 10% of sample size
+  tenpercent <- round(0.1*dim(nz.expdata)[2])
+  
+  rowtable<-function(x) table(x>0)[[1]] > 2 ##function to determine if >2 samples have exp levels >0
+  nonbin<-apply(nz.expdata,1,rowtable) ##apply to matrix
+  gt2.expdata <- nz.expdata[nonbin,] ##remove genes with >10% of RPKM's==0
+  
+  write.table(rownames(gt2.expdata),file=out.dir %&% tis %&% ".meanRPKMgt0.1_3samplesRPKMgt0_genelist",quote=FALSE,col.names = FALSE,row.names=FALSE)
+  cat(tis,":",dim(gt2.expdata)[1],"genes\n")
+}
+```
