@@ -253,6 +253,11 @@ dev.off()
 ##Fig 5
 ###Calculate entropy of Pr and correlate with **cross-tissue and tissue-specific** h2 
 - higher entropy means more likely to be multi-tissue eQTL (expect positive cor. for entropy vs. cross-tissue h2)
+
+Stephens lab data accessed from http://www.gtexportal.org/static/datasets/gtex_analysis_pilot_v3/multi_tissue_eqtls/Multi_tissue_eQTL_GTEx_Pilot_Phase_datasets.tar on 20150722.
+
+From README: “We are using the eQTL posterior probabilities from the UC Multi-tissue eQTL method (doi:10.1371/journal.pgen.1003486) for each of the 9 tissues analyzed in the pilot phase (Adipose_subcutaneous, Artery_Tibal, Whole_Blood, Heart_Left_Ventricle, Lung, Muscle_Skeletal, Nerve_Tibial, Skin_Lower_Leg_Sun_Exposed, Thyroid) in the file res_final_uc_com_genes_com_snps.txt.gz. These values may be interpreted as Pr(SNP is eQTL in tissue s | data). 9875 eGenes are presented, with the”top" (most significant) SNP in each gene used."
+
 ```{r,entropTSh2,eval=TRUE}
 mt.dir <- "/Volumes/im-lab/nas40t2/hwheeler/cross-tissue/Multi_tissue_eQTL_GTEx_Pilot_Phase_datasets/"
 h2.dir <- "/Volumes/im-lab/nas40t2/hwheeler/cross-tissue/"

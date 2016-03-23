@@ -63,7 +63,7 @@ img {
 <div id="header">
 <h1 class="title">01_GenArch_Figs_2015-12-17</h1>
 <h4 class="author"><em>Heather E. Wheeler</em></h4>
-<h4 class="date"><em>2016-03-23 09:41:30</em></h4>
+<h4 class="date"><em>2016-03-23 10:01:59</em></h4>
 </div>
 
 
@@ -433,6 +433,8 @@ dev.off()</code></pre>
 <ul>
 <li>higher entropy means more likely to be multi-tissue eQTL (expect positive cor. for entropy vs. cross-tissue h2)</li>
 </ul>
+<p>Stephens lab data accessed from <a href="http://www.gtexportal.org/static/datasets/gtex_analysis_pilot_v3/multi_tissue_eqtls/Multi_tissue_eQTL_GTEx_Pilot_Phase_datasets.tar" class="uri">http://www.gtexportal.org/static/datasets/gtex_analysis_pilot_v3/multi_tissue_eqtls/Multi_tissue_eQTL_GTEx_Pilot_Phase_datasets.tar</a> on 20150722.</p>
+<p>From README: “We are using the eQTL posterior probabilities from the UC Multi-tissue eQTL method (<a href="doi:10.1371/journal.pgen.1003486" class="uri">doi:10.1371/journal.pgen.1003486</a>) for each of the 9 tissues analyzed in the pilot phase (Adipose_subcutaneous, Artery_Tibal, Whole_Blood, Heart_Left_Ventricle, Lung, Muscle_Skeletal, Nerve_Tibial, Skin_Lower_Leg_Sun_Exposed, Thyroid) in the file res_final_uc_com_genes_com_snps.txt.gz. These values may be interpreted as Pr(SNP is eQTL in tissue s | data). 9875 eGenes are presented, with the”top&quot; (most significant) SNP in each gene used.&quot;</p>
 <pre class="r"><code>mt.dir &lt;- &quot;/Volumes/im-lab/nas40t2/hwheeler/cross-tissue/Multi_tissue_eQTL_GTEx_Pilot_Phase_datasets/&quot;
 h2.dir &lt;- &quot;/Volumes/im-lab/nas40t2/hwheeler/cross-tissue/&quot;
 bslmm.dir &lt;- &quot;/Volumes/im-lab/nas40t2/hwheeler/cross-tissue/BSLMM_exp/&quot;
