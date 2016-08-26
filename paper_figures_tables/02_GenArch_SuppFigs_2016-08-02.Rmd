@@ -1,0 +1,256 @@
+---
+title: "02_GenArch_SuppFigs_2016-08-02"
+author: "Heather Wheeler"
+date: "`r Sys.time()`"
+output: html_document
+---
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+  library(ggplot2)
+  library(reshape2)
+  library(dplyr)
+  library(tidyr)
+  library(GGally)
+  library(grid)
+  "%&%" = function(a,b) paste(a,b,sep="")
+  source('/Volumes/im-lab/nas40t2/hwheeler/PrediXcan_CV/GTEx_2014-06013_release/transfers/PrediXmod/Paper_plots/multiplot.R')
+  my.dir <- '/Volumes/im-lab/nas40t2/hwheeler/cross-tissue/'
+  fig.dir <- '~/GitHub/GenArch/GenArchPaper/Figures/'
+  rna.dir <- my.dir %&% "gtex-rnaseq/"
+  out.dir <- rna.dir %&% "ind-tissues-RPKM/"
+  my.vol <- '/Volumes/im-lab/nas40t2/hwheeler/cross-tissue/BSLMM_exp/'
+  otd.dir <- '/Volumes/im-lab/nas40t2/hwheeler/cross-tissue/gtex-OTD-CV-R2/'
+```
+
+## Fig S1
+###Tissue-Wide joint global estimates
+```{r, glo.jt.tw,eval=FALSE,fig.width=12,fig.height=12, message=FALSE, warning=FALSE}
+tislist <- scan(my.dir %&% 'rmTW.ten.tissue.list',sep="\n",what="character")[2:10]##rm cross-tissue from plot
+ts <- data.frame()
+for(tis in tislist){
+  data <- read.table(my.dir %&% 'gtex-h2-estimates/GTEx.TW.' %&% tis %&% '.h2.all.models_FHSfdr0.05.Chr1-22_globalOtherChr.2015-10-06.txt',header=T,sep="\t") 
+  explist <- scan(out.dir %&% tis %&% ".meanRPKMgt0.1_3samplesRPKMgt0_genelist","c")
+  data <- dplyr::filter(data,ensid %in% explist)
+  glo.jt <- select(data,tissue,glo.jt.h2,glo.jt.se)  %>% mutate(ymin = pmax(0, glo.jt.h2 - 2 * glo.jt.se), ymax = pmin(1, glo.jt.h2 + 2 * glo.jt.se)) %>% mutate(glo.jt.P = 2*pnorm(-abs(glo.jt.h2/glo.jt.se))) %>%  mutate(glo.jt.Q = p.adjust(glo.jt.P,method="BH")) %>% mutate(gloQlt05=glo.jt.Q < 0.1) %>% arrange(glo.jt.h2) %>% mutate(place=1:length(data$tissue)) 
+  ts <- rbind(ts,glo.jt)
+}
+
+ts <- mutate(ts, `q-value`=factor(gloQlt05,labels=c('\u2265 0.1')))
+
+p<-ggplot(ts[complete.cases(ts),],aes(x=place,y=glo.jt.h2,ymin=ymin,ymax=ymax,color=`q-value`) ) + facet_wrap(~tissue,ncol=3) + geom_pointrange(col='gray')+geom_point()+ylab(expression("global h"^2)) + xlab(expression("genes ordered by joint global h"^2))+theme_bw() + coord_cartesian(ylim=c(0,1))
+
+png(filename=fig.dir %&% "Fig-GTEx_TW_glo_jt_h2.png",width=720,height=480)
+p
+dev.off()
+tiff(filename=fig.dir %&% "Fig-GTEx_TW_glo_jt_h2.tiff",width=720,height=480)
+p
+dev.off()
+```
+
+##Fig S2
+###Plot GTEx Tissue-Wide Elastic Net results
+```{r TWglmnet,eval=FALSE,fig.width=12,fig.height=12, message=FALSE, warning=FALSE}
+tislist <- scan('/Volumes/im-lab/nas40t2/hwheeler/cross-tissue/nine.tissue.list','c')
+finalgdata <- data.frame()
+for(tis in tislist){
+  alpha1 <- read.table(my.dir %&% 'gtex-OTD-CV-R2/TW_' %&% tis %&% '_exp_10-foldCV_elasticNet_alpha1_hapmapSnpsCEU_all_chr1-22_2015-09-10.txt',header=TRUE) %>%  mutate(`1`=R2) %>% select(gene,`1`)
+  ngenesall <- length(unique(alpha1$gene))
+  alpha95 <- read.table(my.dir %&% 'gtex-OTD-CV-R2/TW_' %&% tis %&% '_exp_10-foldCV_elasticNet_alpha0.95_hapmapSnpsCEU_all_chr1-22_2015-09-10.txt',header=TRUE) %>% mutate(`0.95`=R2) %>% select(gene,`0.95`)
+  alpha50 <- read.table(my.dir %&% 'gtex-OTD-CV-R2/TW_' %&% tis %&% '_exp_10-foldCV_elasticNet_alpha0.5_hapmapSnpsCEU_all_chr1-22_2015-09-10.txt',header=TRUE) %>% mutate(`0.50`=R2) %>% select(gene,`0.50`)
+  alpha05 <- read.table(my.dir %&% 'gtex-OTD-CV-R2/TW_' %&% tis %&% '_exp_10-foldCV_elasticNet_alpha0.05_hapmapSnpsCEU_all_chr1-22_2015-09-10.txt',header=TRUE) %>% mutate(`0.05`=R2) %>% select(gene,`0.05`)
+  data <- inner_join(alpha05,alpha50,by='gene')
+  #data <- inner_join(data,alpha95,by='gene') #rm alpha = 0.95 from plots
+  data <- inner_join(data,alpha1,by='gene')
+  gdata <- gather(data,alpha,R2,2:3) %>% mutate(tissue=tis)
+  finalgdata <- rbind(finalgdata,gdata)
+}
+
+p<-ggplot(finalgdata, aes(y = `1` - R2, x = `1`, group=alpha, color=alpha)) + facet_wrap(~tissue) + geom_point(show_guide = TRUE) + ylab(expression(paste("R"^2, " difference (LASSO - alpha)"))) + xlab(expression(paste("R"^2, " (LASSO)"))) +theme_bw(15)+ theme(legend.justification=c(0,1), legend.position=c(0,1))
+
+png(filename=fig.dir %&% "Fig-GTEx_TW_EN_CV.png",width=600,height=600)
+p
+dev.off()
+tiff(filename=fig.dir %&% "Fig-GTEx_TW_EN_CV.tiff",width=600,height=600)
+p
+dev.off()
+```
+
+##FigS3
+###GTEx cross-tissue and tissue-wide h^2^ (A) and SE (B). 
+```{r TW_v_CT,fig.width=12,fig.height=12, echo=TRUE, warning=FALSE, message=FALSE,eval=FALSE}
+h2TW<-read.table(my.dir %&% "GTEx_Tissue-Wide_local_h2.txt",header=T)
+seTW<-read.table(my.dir %&% "GTEx_Tissue-Wide_local_se.txt",header=T)
+
+gh2_TW<-gather(h2TW,"CrossTissue","Tissue",3:11)
+colnames(gh2_TW) <- c('ensid','CrossTissue','TissueName','Tissue')
+fig5a<-ggplot(gh2_TW,aes(x=Tissue,y=CrossTissue)) +facet_wrap(~TissueName,scales="fixed",ncol=3) + geom_point(alpha=1/10) + geom_abline(intercept=0, slope=1,color='red')  + ylab(expression('Cross-Tissue h'^2)) + xlab(expression('Tissue-Wide h'^2)) +  ggtitle("A")+ coord_cartesian(ylim=c(-0.1,1.1),xlim=c(-0.1,1.1)) +theme_bw()+ theme(plot.title = element_text(hjust = 0)) 
+
+gse_TW<-gather(seTW,"CrossTissue","Tissue",3:11)
+colnames(gse_TW) <- c('ensid','CrossTissue','TissueName','Tissue')
+fig5b<-ggplot(gse_TW,aes(x=Tissue,y=CrossTissue)) +facet_wrap(~TissueName,scales="fixed",ncol=3) + geom_point(alpha=1/10) + geom_abline(intercept=0, slope=1,color='red')  + ylab('Cross-Tissue SE') + xlab('Tissue-Wide SE') +  ggtitle("B") + coord_cartesian(ylim=c(-0.01,0.16),xlim=c(-0.01,0.16))+theme_bw()+ theme(plot.title = element_text(hjust = 0)) 
+
+tiff(filename=fig.dir %&% "Fig-GTEx-CT-v-TW.tiff",width=480,height=960)
+multiplot(fig5a,fig5b)
+dev.off()
+
+png(filename=fig.dir %&% "Fig-GTEx-CT-v-TW.png",width=480,height=960)
+multiplot(fig5a,fig5b)
+dev.off()
+```
+
+##FigS4
+####check tissue-wide correlations PGE v PVE
+```{r twcorr,warning=FALSE,message=FALSE,eval=FALSE,fig.width=12,fig.height=12}
+tislist <- scan('/Volumes/im-lab/nas40t2/hwheeler/cross-tissue/nine.tissue.list',sep="\n",what="character")
+tw <- data.frame()
+for(tis in tislist){
+  data <- read.table(my.vol %&% tis %&% '_TW_exp_BSLMM-s100K_iterations_all_chr1-22_2015-10-18.txt',header=T,sep="\t") 
+  explist <- scan(out.dir %&% tis %&% ".meanRPKMgt0.1_3samplesRPKMgt0_genelist","c")
+  data <- dplyr::filter(data,gene %in% explist)
+  subdata <- select(data,gene,pve50,pge50,pge025,pge975) %>% mutate(tissue=tis,`pge025>0.01`=pge025>0.01)
+  res<-cor.test(subdata$pge50,subdata$pve50)
+  tw <- rbind(tw,subdata)
+}
+
+tw <- mutate(tw,LCS=factor(`pge025>0.01`,labels=c('\u2264 0.01','> 0.01')))
+
+p<-ggplot(tw,aes(x=pve50,y=pge50,ymin=pge025,ymax=pge975,color=LCS) ) + facet_wrap(~tissue,ncol=3) + geom_pointrange(col='gray')+geom_point()+theme_bw()+ coord_cartesian(xlim=c(-0.05,1.05))+ xlab("PVE") + ylab("PGE")
+
+###calc % nonzero for each tissue
+### ADD to plot legend
+pvec<-vector()
+h2vec<-vector()
+a<-tw %>% select(tissue,`pge025>0.01`) %>% spread(tissue,`pge025>0.01`)
+for(i in 1:9){
+  tis<-colnames(a)[i]
+  per <- signif(table(a[,i])/sum(table(a[,i])),3)*100
+  pvec <- c(pvec,per[2])
+}
+###calc mean PVE for each tissue
+a<-tw %>% select(tissue,pve50) %>% spread(tissue,pve50)
+for(i in 1:9){
+  tis<-colnames(a)[i]
+  meanh2 <- signif(mean(a[,i],na.rm=TRUE),3)
+  h2vec <- c(h2vec,meanh2)
+}
+pvec<-ifelse(is.na(pvec),0,pvec)
+ann_text <- data.frame( pge50 = rep(0.08,9), pve50 = rep(0.05,9), percent= pvec, mean_PVE = h2vec, tissue = factor(colnames(a)), pge025=rep(0.9,9), pge975=rep(0.9,9), nonzeroCI=rep(NA,9), se=rep(0.9,9))
+p3<-p+geom_text(data=ann_text,aes(label=paste("percent_LCS_gt_0.01 ==",percent,sep="")),color="black",show.legend=F,parse=T,hjust=0,size=3)+ theme(legend.justification=c(1,0), legend.position=c(1,0))
+
+png(filename=fig.dir %&% "Fig-GTEx_TW_BSLMM.png",width=720,height=480)
+p3
+dev.off()
+tiff(filename=fig.dir %&% "Fig-GTEx_TW_BSLMM.tiff",width=720,height=480)
+p3
+dev.off()
+```
+
+##FigS5
+###check tissue-specific correlations PGE vs PVE
+```{r tscorr,warning=FALSE,message=FALSE,eval=FALSE,fig.width=12,fig.height=12, message=FALSE, warning=FALSE}
+hun <- read.table(my.vol %&% 'cross-tissue_exp_BSLMM-s100K_iterations_all_chr1-22_2015-07-20.txt',header=T)
+ct <- hun %>% arrange(pge50) %>% mutate(position=1:length(pge50),`pge025>0.01`=pge025>0.01) 
+ct <- ct[complete.cases(ct),]
+h2.TW <- read.table(my.vol %&% 'GTEx_Tissue-Wide_local_h2_se_geneinfo.txt',header=TRUE, sep='\t')
+genenames <- h2.TW %>% select(gene=EnsemblGeneID,genename=AssociatedGeneName)
+ct <- left_join(ct,genenames,by='gene')
+
+tislist <- scan('/Volumes/im-lab/nas40t2/hwheeler/cross-tissue/nine.tissue.list',sep="\n",what="character")
+ts <- data.frame()
+for(tis in tislist){
+  data <- read.table(my.vol %&% tis %&% '_TS_exp_BSLMM-s100K_iterations_all_chr1-22_2015-08-06.txt',header=T,sep="\t")  
+  subdata <- select(data,gene,pve50,pge50,pge025,pge975) %>% mutate(tissue=tis,`pge025>0.01`=pge025>0.01)
+  res<-cor.test(subdata$pge50,subdata$pve50)
+  ts <- rbind(ts,subdata)
+}
+
+##combine CT and TS PGE vs. PVE in one plot
+subct <- select(ct,gene,pve50,pge50,pge025,pge975) %>% mutate(tissue="cross-tissue",`pge025>0.01`=pge025>0.01)
+ctts <- rbind(subct,ts) %>% mutate(tissue=factor(tissue,levels=c("cross-tissue","Adipose-Subcutaneous","Artery-Tibial","Heart-LeftVentricle","Lung","Muscle-Skeletal","Nerve-Tibial","Skin-SunExposed(Lowerleg)","Thyroid","WholeBlood")),LCS=factor(`pge025>0.01`,labels=c('\u2264 0.01','> 0.01')))
+p<-ggplot(ctts,aes(x=pve50,y=pge50,ymin=pge025,ymax=pge975,color=LCS)) + facet_wrap(~tissue,ncol=2) + geom_pointrange(col='gray')+geom_point()+theme_bw()+ coord_cartesian(xlim=c(-0.05,1.05))+ xlab("PVE") + ylab("PGE")
+
+###calc % nonzero for each tissue
+### ADD to plot legend
+pvec<-vector()
+h2vec<-vector()
+a<-ctts %>% select(tissue,`pge025>0.01`) %>% spread(tissue,`pge025>0.01`)
+for(i in 1:10){
+  tis<-colnames(a)[i]
+  per <- signif(table(a[,i])/sum(table(a[,i])),3)*100
+  pvec <- c(pvec,per[2])
+}
+###calc mean PVE for each tissue
+a<-ctts %>% select(tissue,pve50) %>% spread(tissue,pve50)
+for(i in 1:10){
+  tis<-colnames(a)[i]
+  meanh2 <- signif(mean(a[,i],na.rm=TRUE),3)
+  h2vec <- c(h2vec,meanh2)
+}
+pvec<-ifelse(is.na(pvec),0,pvec)
+ann_text <- data.frame( pge50 = rep(0.08,10), pve50 = rep(0.55,10), percent= pvec, mean_PVE = h2vec, tissue = factor(colnames(a)), pge025=rep(0.9,10), pge975=rep(0.9,10), nonzeroCI=rep(NA,10), se=rep(0.9,10))
+
+p3<-p+geom_text(data=ann_text,aes(label=paste("percent_LCS_gt_0.01 ==",percent,sep="")),color="black",show.legend=F,parse=T,hjust=0,size=3)+ theme(legend.justification=c(1,1), legend.position=c(1,1))
+
+png(filename=fig.dir %&% "Fig-GTEx_CT-TS_BSLMM.png",width=600,height=600)
+p3
+dev.off()
+tiff(filename=fig.dir %&% "Fig-GTEx_CT-TS_BSLMM.tiff",width=600,height=600)
+p3
+dev.off()
+```
+
+##FigS6
+###GTEx cross-tissue vs tissue-specific h^2^ (A) and SE (B). 
+```{r TS_v_CT,fig.width=12,fig.height=12, echo=TRUE, warning=FALSE, message=FALSE,eval=FALSE, message=FALSE, warning=FALSE}
+h2TS<-read.table(my.dir %&% "GTEx_Tissue-Specific_local_h2.txt",header=T)
+seTS<-read.table(my.dir %&% "GTEx_Tissue-Specific_local_se.txt",header=T)
+
+gh2_TS<-gather(h2TS,"CrossTissue","Tissue",3:11)
+colnames(gh2_TS) <- c('ensid','CrossTissue','TissueName','Tissue')
+figS2a<-ggplot(gh2_TS,aes(x=Tissue,y=CrossTissue)) +facet_wrap(~TissueName,scales="fixed",ncol=3) + geom_point(alpha=1/10) + geom_abline(intercept=0, slope=1,color='red')  + ylab(expression('Cross-Tissue h'^2)) + xlab(expression('Tissue-Specific h'^2)) +  ggtitle("A")+ coord_cartesian(ylim=c(-0.1,1.1),xlim=c(-0.1,1.1)) + theme_bw()+ theme(plot.title = element_text(hjust = 0)) 
+
+gse_TS<-gather(seTS,"CrossTissue","Tissue",3:11)
+colnames(gse_TS) <- c('ensid','CrossTissue','TissueName','Tissue')
+figS2b<-ggplot(gse_TS,aes(x=Tissue,y=CrossTissue)) +facet_wrap(~TissueName,scales="fixed",ncol=3) + geom_point(alpha=1/10) + geom_abline(intercept=0, slope=1,color='red') + ylab('Cross-Tissue SE') + xlab('Tissue-Specific SE') +  ggtitle("B") + coord_cartesian(ylim=c(-0.01,0.16),xlim=c(-0.01,0.16))+theme_bw() + theme(plot.title = element_text(hjust = 0)) 
+
+tiff(filename=fig.dir %&% "Fig-GTEx-CT-v-TS.tiff",width=480,height=960)
+multiplot(figS2a,figS2b)
+dev.off()
+
+png(filename=fig.dir %&% "Fig-GTEx-CT-v-TS.png",width=480,height=960)
+multiplot(figS2a,figS2b)
+dev.off()
+```
+
+##FigS7
+###Plot CT and TS together elastic net
+```{r CTTS,eval=FALSE,fig.width=12,fig.height=12, message=FALSE, warning=FALSE}
+cten<-read.table(otd.dir %&% 'cross-tissue_exp_10-foldCV_elasticNet_R2_for_ggplot2.txt',header=T,check.names=F)
+ngenesall <- length(unique(cten$gene))
+g_cten<-gather(cten,alpha,R2,3:4)
+
+tislist <- scan('/Volumes/im-lab/nas40t2/hwheeler/cross-tissue/nine.tissue.list','c')
+finalgdata <- data.frame()
+for(tis in tislist){
+  alpha1 <- read.table(otd.dir %&% 'TS_' %&% tis %&% '_exp_10-foldCV_elasticNet_alpha1_hapmapSnpsCEU_all_chr1-22_2015-08-27.txt',header=TRUE) %>%  mutate(`1`=R2) %>% select(gene,`1`)
+  ngenesall <- length(unique(alpha1$gene))
+  alpha95 <- read.table(otd.dir %&% 'TS_' %&% tis %&% '_exp_10-foldCV_elasticNet_alpha0.95_hapmapSnpsCEU_all_chr1-22_2015-08-27.txt',header=TRUE) %>% mutate(`0.95`=R2) %>% select(gene,`0.95`)
+  alpha50 <- read.table(otd.dir %&% 'TS_' %&% tis %&% '_exp_10-foldCV_elasticNet_alpha0.5_hapmapSnpsCEU_all_chr1-22_2015-08-27.txt',header=TRUE) %>% mutate(`0.50`=R2) %>% select(gene,`0.50`)
+  alpha05 <- read.table(otd.dir %&% 'TS_' %&% tis %&% '_exp_10-foldCV_elasticNet_alpha0.05_hapmapSnpsCEU_all_chr1-22_2015-08-27.txt',header=TRUE) %>% mutate(`0.05`=R2) %>% select(gene,`0.05`)
+  data <- inner_join(alpha05,alpha50,by='gene')
+  #data <- inner_join(data,alpha95,by='gene') #rm alpha 0.95 from plot
+  data <- inner_join(data,alpha1,by='gene')
+  gdata <- gather(data,alpha,R2,2:3) %>% mutate(tissue=tis)
+  finalgdata <- rbind(finalgdata,gdata)
+}
+
+ctsort <- select(g_cten,gene,`1`,alpha,R2) %>% mutate(tissue=g_cten$`cross-tissue`)
+ctts <- rbind(ctsort,finalgdata)
+p<-ggplot(ctts, aes(y = `1` - R2, x = `1`, group=alpha, color=alpha)) + facet_wrap(~tissue,nrow=2) + geom_point(show.legend = TRUE) + ylab(expression(paste("R"^2, " difference (LASSO - alpha)"))) + xlab(expression(paste("R"^2, " (LASSO)"))) +theme_bw(15)+ theme(legend.justification=c(1,1), legend.position=c(1,1))
+
+png(filename=fig.dir %&% "Fig-GTEx_CT-TS_EN_CV.png",width=960,height=480)
+p
+dev.off()
+tiff(filename=fig.dir %&% "Fig-GTEx_CT-TS_EN_CV.tiff",width=960,height=480)
+p
+dev.off()
+```

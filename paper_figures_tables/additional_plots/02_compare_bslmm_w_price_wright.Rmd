@@ -1,0 +1,60 @@
+---
+title: "02_compare_bslmm_w_price_wright"
+author: "Heather Wheeler"
+date: "`r Sys.time()`"
+output: html_document
+---
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+packages<-c('ggplot2','dplyr','mada')
+lapply(packages, library, character.only=T)
+"%&%" = function(a,b) paste(a,b,sep="")
+h2.dir <- '/Volumes/im-lab/nas40t2/Data/Annotations/heritability/'
+```
+
+
+```{r,fig.width=5,fig.height=5,warning=F,message=F}
+bslmm <- read.table('/Volumes/im-lab/nas40t2/hwheeler/cross-tissue/BSLMM_exp/DGN-WB_exp_BSLMM-s100K_iterations_all_genes_2015-06-14.txt',header=TRUE) %>% dplyr::select(gene,pve50)
+dim(bslmm)
+##get price h2 (custom-made human array containing 23,720 unique oligonucleotide probes, http://www.nature.com/nature/journal/v452/n7186/full/nature06758.html)
+price <- read.table(h2.dir %&% "Alkes/h2all.txt",header=TRUE) %>% dplyr::rename(gene=gname)
+dim(price)
+wright <- read.table(h2.dir %&% "Fred/h2PB.txt",header=TRUE) %>% dplyr::rename(gene=gname)
+dim(wright)
+all<-full_join(bslmm,price,by='gene')
+all<-full_join(all,wright,by='gene')
+#add GTEx whole blood
+gtex <- read.table('/Volumes/im-lab/nas40t2/hwheeler/cross-tissue/BSLMM_exp/WholeBlood_TW_exp_BSLMM-s100K_iterations_all_chr1-22_2015-10-18.txt',header=T) %>% mutate(gtexWB=pve50,ensid=gene) %>% dplyr::select(ensid,gtexWB)
+gtexh2 <- read.table('/Volumes/im-lab/nas40t2/hwheeler/cross-tissue/GTEx.TW.WholeBlood.h2.all.models_FHSfdr0.05.Chr1-22_globaleQTLOtherChr_reml-no-constrain.2015-12-14.txt',header=T) %>% dplyr::select(gene,ensid)
+gtex<-left_join(gtex,gtexh2,by='ensid')
+all<-full_join(all,gtex,by='gene')
+dim(all)
+#dgn v. gtex whole blood
+ggplot(all,aes(x=pve50,y=gtexWB))+geom_point(alpha=1/4)+geom_smooth()+theme_bw()+coord_cartesian(ylim=c(-0.15,1.02))
+res<-cor.test(all$pve50,all$gtexWB,method='s')
+CIrho(res$estimate,length(all$pve50))
+#dgn v. price blood
+ggplot(all,aes(x=pve50,y=h2bloodcis))+geom_point(alpha=1/4)+geom_smooth()+theme_bw()
+res<-cor.test(all$pve50,all$h2bloodcis,method='s')
+CIrho(res$estimate,length(all$pve50))
+#dgn v. wright peripheral blood
+ggplot(all,aes(x=pve50,y=h2PB))+geom_point(alpha=1/4)+geom_smooth()+theme_bw()
+res<-cor.test(all$pve50,all$h2PB,method='s')
+CIrho(res$estimate,length(all$pve50))
+#wright v. price blood
+ggplot(all,aes(x=h2PB,y=h2bloodcis))+geom_point(alpha=1/4)+geom_smooth()+theme_bw()
+res<-cor.test(all$h2PB,all$h2bloodcis,method='s')
+CIrho(res$estimate,length(all$pve50))
+```
+
+###cor tables
+```{r}
+allnum <- dplyr::select(all,-gene,-ensid)
+round(cor(allnum,use='pairwise.complete.obs',method="s"),3)
+#Blood only
+allblood <- dplyr::mutate(all,dgnWB=pve50,Price=h2bloodcis,Wright=h2PB) %>% dplyr::select(dgnWB,gtexWB,Price,Wright)
+#Pearson
+round(cor(allblood,use='pairwise.complete.obs'),3)
+#Spearman
+round(cor(allblood,use='pairwise.complete.obs',method="s"),3)
+```

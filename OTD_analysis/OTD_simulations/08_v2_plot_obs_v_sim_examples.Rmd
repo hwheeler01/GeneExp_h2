@@ -1,0 +1,176 @@
+---
+title: "08_v2_plot_obs_v_sim_examples"
+author: "Heather E. Wheeler"
+date: "`r Sys.time()`"
+output: html_document
+---
+
+```{r, warning=FALSE, message=FALSE}
+library(dplyr)
+library(data.table)
+library(ggplot2)
+library(GGally)
+library(tidyr)
+"%&%" = function(a,b) paste(a,b,sep="")
+pre.dir <- "/Volumes/im-lab/nas40t2/hwheeler/cross-tissue/"
+my.dir <- pre.dir %&% "paper-reviewer-requests/OTD_simulations/"
+obs.dir <- my.dir %&% "obs_otd_exp/"
+sim.dir <- my.dir %&% "lmer.fits/"
+obs.h2.dir <- pre.dir %&% "gtex-h2-estimates/"
+fig.dir <- '~/GitHub/GenArch/GenArchPaper/Figures/'
+source("~/Github/ThePlatinumStudy/Ototoxicity_modeling/multiplot.R")
+```
+
+See <https://github.com/hwheeler01/GenArch/blob/master/paper-reviewer-requests/OTD_simulations/01_make_sim.r> for how simulated expression phenotypes were generated. See <https://github.com/hwheeler01/GenArch/blob/master/paper-reviewer-requests/OTD_simulations/04_get_gencor_obs_v_sim.R> for how correlations were calculated.
+
+###find representative genes
+```{r,  warning=FALSE, message=FALSE}
+allctcor <- fread(my.dir %&% "CT_genecor_obs_v_sim.txt")
+alltscor <- fread(my.dir %&% "TS_genecor_obs_v_sim.txt")
+for(i in 1:2){
+  ctsum1 <- dplyr::filter(allctcor,sim=="errvar-sum_mult-" %&% i) %>% arrange(desc(genecor))
+  print(summary(ctsum1))
+  print(head(ctsum1))
+  dplyr::filter(ctsum1,genecor>0.5393 & genecor<0.5394)
+  print(dplyr::filter(ctsum1,gene=="ENSG00000166181.8"))
+  print(dplyr::filter(ctsum1,gene=="ENSG00000137776.12"))
+  print(dplyr::filter(ctsum1,gene=="ENSG00000135480.10"))
+  print(dplyr::filter(ctsum1,gene=="ENSG00000148950.5"))
+  print(dplyr::filter(ctsum1,gene=="ENSG00000180739.12"))
+  tssum1 <- dplyr::filter(alltscor,sim=="errvar-sum_mult-" %&% i)
+  print(summary(tssum1))
+  print(dplyr::filter(tssum1,gene=="ENSG00000166181.8"))
+  print(dplyr::filter(tssum1,gene=="ENSG00000137776.12"))
+  print(dplyr::filter(tssum1,gene=="ENSG00000135480.10"))
+  print(dplyr::filter(tssum1,gene=="ENSG00000148950.5"))
+  print(dplyr::filter(tssum1,gene=="ENSG00000180739.12"))
+}
+```
+
+###read in obs & sim OTD
+```{r}
+obsct <- fread(obs.dir %&% "CT_exp.txt")
+tislist <- scan(pre.dir %&% "nine.spaces.tissue.list", "c", sep='\n')
+for(tis in tislist){
+  obstis <- fread(obs.dir %&% "TS_" %&% tis %&% "_exp.txt", sep='\t')
+  if(exists("obsts") == FALSE){
+    obsts <- obstis
+  }else{
+    obsts <- rbind(obsts, obstis)
+  }
+}
+
+tisannot <- read.table(pre.dir %&% "gtex-annot/GTEx_Analysis_2014-06-13.SampleTissue.annot",header=T,sep='\t')
+simct1 <- fread(sim.dir %&% "ranef.Cross-tissue.exp.pheno_sim_exp_phenotype_errvar-sum_mult-1_seed-123_lmer.ranefSUBJID_fixefSMTSD.gender.PFs_2016-07-15.txt")
+simts1 <- fread(sim.dir %&% "resid.Tissue-specific.exp.pheno_sim_exp_phenotype_errvar-sum_mult-1_seed-123_lmer.ranefSUBJID_fixefSMTSD.gender.PFs_2016-07-15.txt")
+simct2 <- fread(sim.dir %&% "ranef.Cross-tissue.exp.pheno_sim_exp_phenotype_errvar-sum_mult-2_seed-123_lmer.ranefSUBJID_fixefSMTSD.gender.PFs_2016-07-15.txt")
+simts2 <- fread(sim.dir %&% "resid.Tissue-specific.exp.pheno_sim_exp_phenotype_errvar-sum_mult-2_seed-123_lmer.ranefSUBJID_fixefSMTSD.gender.PFs_2016-07-15.txt")
+```
+
+###rep examples
+```{r,fig.width=10,fig.height=5}
+genelist<-c('ENSG00000166181.8',"ENSG00000137776.12","ENSG00000135480.10","ENSG00000148950.5","ENSG00000180739.12")
+glist <- c('API5','SLTM','KRT7','IMMP1L','S1PR5')
+simctlist <- list(simct1,simct2)
+simtslist <- list(simts1,simts2)
+
+for(i in 1:length(genelist)){
+  rvec<-vector()
+  for(j in 1:2){
+    gene <- genelist[i]
+    g <- glist[i]
+    geneobsct <- dplyr::select(obsct,SUBJID,matches(gene))
+    simct <- simctlist[[j]]
+    genesimct <- dplyr::select(simct,SUBJID,matches(gene))
+    genect <- inner_join(geneobsct,genesimct,by='SUBJID') %>% mutate(TISSUE='Cross-tissue',SIM=as.character(j)) %>% dplyr::select(SUBJID,TISSUE,SIM,starts_with(gene))
+    colnames(genect) <- c("ID","TISSUE","SIM","observed","simulated")
+    geneobsts <- dplyr::select(obsts,SAMPID,TISSUE,matches(gene))
+    simts <- simtslist[[j]]
+    genesimts <- dplyr::select(simts,SAMPID,matches(gene))
+    genets <- inner_join(geneobsts,genesimts,by='SAMPID') %>% mutate(SIM=as.character(j)) %>% dplyr::select(SAMPID,TISSUE,SIM,starts_with(gene))
+    colnames(genets) <- c("ID","TISSUE","SIM","observed","simulated")
+    geneall <- rbind(genect,genets)
+    tislist <- sort(names(table(geneall$TISSUE)))
+    for(tis in tislist){
+      subgene <- dplyr::filter(geneall,TISSUE==tis)
+      res <- cor.test(subgene$observed,subgene$simulated)
+      rvec <- cbind(rvec,unname(round(res$estimate,3)))
+    }
+    if(exists("simall")==FALSE){
+      simall <- geneall
+    }else{
+      simall <- rbind(simall,geneall)
+    }
+  }
+  ann_text1 <- data.frame( observed = rep(0,10), simulated = rep(-2.5,10), R= rvec[1:10], TISSUE = factor(tislist), ID=rep(0.9,10))
+  ann_text2 <- data.frame( observed = rep(0,10), simulated = rep(-3,10), R= rvec[11:20], TISSUE = factor(tislist), ID=rep(0.9,10))
+  p<-ggplot(simall,aes(x=observed,y=simulated,col=SIM)) + geom_point() + geom_smooth(method="lm") + facet_wrap(~TISSUE,ncol=5) + theme_bw() + ggtitle(gene %&% " - " %&% g)
+  print(p+geom_text(data=ann_text1,aes(label=paste("R==",R,sep="")),color="#F8766D",show_guide=F,parse=T,hjust=0,size=3)+geom_text(data=ann_text2,aes(label=paste("R==",R,sep="")),color="#00BFC4",show_guide=F,parse=T,hjust=0,size=3))
+  rm('simall')
+}
+```
+
+###make png file
+```{r}
+gene <- "ENSG00000137776.12"
+g <- "SLTM"
+rvec<-vector()
+for(j in 1:2){
+    geneobsct <- dplyr::select(obsct,SUBJID,matches(gene))
+    simct <- simctlist[[j]]
+    genesimct <- dplyr::select(simct,SUBJID,matches(gene))
+    genect <- inner_join(geneobsct,genesimct,by='SUBJID') %>% mutate(TISSUE='Cross-tissue',SIM=as.character(j)) %>% dplyr::select(SUBJID,TISSUE,SIM,starts_with(gene))
+    colnames(genect) <- c("ID","TISSUE","SIM","observed","simulated")
+    geneobsts <- dplyr::select(obsts,SAMPID,TISSUE,matches(gene))
+    simts <- simtslist[[j]]
+    genesimts <- dplyr::select(simts,SAMPID,matches(gene))
+    genets <- inner_join(geneobsts,genesimts,by='SAMPID') %>% mutate(SIM=as.character(j)) %>% dplyr::select(SAMPID,TISSUE,SIM,starts_with(gene))
+    colnames(genets) <- c("ID","TISSUE","SIM","observed","simulated")
+    geneall <- rbind(genect,genets)
+    tislist <- sort(names(table(geneall$TISSUE)))
+    for(tis in tislist){
+      subgene <- dplyr::filter(geneall,TISSUE==tis)
+      res <- cor.test(subgene$observed,subgene$simulated)
+      rvec <- cbind(rvec,unname(round(res$estimate,3)))
+    }
+    if(exists("simall")==FALSE){
+      simall <- geneall
+    }else{
+      simall <- rbind(simall,geneall)
+    }
+}
+ann_text1 <- data.frame( observed = rep(0.5,10), simulated = rep(-2.5,10), R= rvec[1:10], TISSUE = factor(tislist), ID=rep(0.9,10))
+ann_text2 <- data.frame( observed = rep(0.5,10), simulated = rep(-3,10), R= rvec[11:20], TISSUE = factor(tislist), ID=rep(0.9,10))
+p<-ggplot(simall,aes(x=observed,y=simulated,col=SIM)) + geom_point() + geom_smooth(method="lm") + facet_wrap(~TISSUE,ncol=5) + theme_bw() + ggtitle(gene %&% " - " %&% g)
+p1<-p+geom_text(data=ann_text1,aes(label=paste("R==",R,sep="")),color="#F8766D",show_guide=F,parse=T,hjust=0,size=3)+geom_text(data=ann_text2,aes(label=paste("R==",R,sep="")),color="#00BFC4",show_guide=F,parse=T,hjust=0,size=3)
+
+png(filename=fig.dir %&% "sim_v_obs_SLTM.png",width=960,height=480)
+p1
+dev.off()
+#need cairo_ps for shading to render, have to install https://www.xquartz.org/
+ggsave(fig.dir %&% "sim_v_obs_SLTM_mult1_mult2.eps",device=cairo_ps,width=12,height=6)
+
+#plot distribution
+for(i in 1:2){
+  ctsum1 <- dplyr::filter(allctcor,sim=="errvar-sum_mult-" %&% i) %>% mutate(SIM=as.character(i),tissue='Cross-tissue',tsgenecor=genecor) %>% dplyr::select(tsgenecor,tissue,SIM,gene)
+  tssum1 <- dplyr::filter(alltscor,sim=="errvar-sum_mult-" %&% i) %>% mutate(SIM=as.character(i)) %>% dplyr::select(tsgenecor,tissue,SIM,gene)
+  sum1all <- rbind(ctsum1,tssum1)
+  if(exists('sumall')==FALSE){
+    sumall <- sum1all
+  }else{
+    sumall <- rbind(sumall,sum1all)
+  }
+}
+p2<-ggplot(sumall,aes(tsgenecor,col=SIM)) + geom_freqpoly() + facet_wrap(~tissue,ncol=5) + theme_bw() + xlab('Gene correlation (simulated v. observed)')
+p2
+
+png(filename=fig.dir %&% "sim_v_obs_SLTM_ALL_mult1_mult2.png",width=960,height=960)
+multiplot(p1+ggtitle('A\n')+theme(plot.title=element_text(hjust=0),text=element_text(size=12)),p2+ggtitle('B\n')+theme(plot.title=element_text(hjust=0),text=element_text(size=12)))
+dev.off()
+
+setEPS()
+postscript(file=fig.dir %&% "sim_v_obs_SLTM_ALL_mult1_mult2.eps",width=12,height=12)
+multiplot(p1+ggtitle('A\n')+theme(plot.title=element_text(hjust=0),text=element_text(size=12)),p2+ggtitle('B\n')+theme(plot.title=element_text(hjust=0),text=element_text(size=12)))
+dev.off()
+
+```

@@ -1,0 +1,36 @@
+---
+title: "03_pLI_plot"
+author: "Heather E. Wheeler"
+date: "August 5, 2016"
+output: html_document
+---
+
+```{r}
+fig.dir <- '~/GitHub/GenArch/GenArchPaper/Figures/'
+"%&%" = function(a,b) paste(a,b,sep="")
+library(ggplot2)
+library(dplyr)
+my.dir <- '/Volumes/im-lab/nas40t2/hwheeler/cross-tissue/'
+pred.perf<-readRDS('~/Dropbox/Haky-2016/work.dir/pred.perf.for.heather.RDS')
+dgn <- read.table(my.dir %&% 'expArch_DGN-WB_imputedGTs/DGN-WB.h2.all.models_FHSfdr0.05.Chr1-22_globalAll_reml-no-constrain.2015-12-15.txt',header=T)
+pred.perf <- dplyr::filter(pred.perf,tissue=="DGN_WB")
+dgnpLI <- left_join(dgn,pred.perf,by=c("gene"="genename"))
+d<-mutate(dgnpLI,h2=factor(local.h2.x>0.1,labels=c('\u2264 0.1','> 0.1'))) 
+p<-ggplot(d %>% filter(!is.na(pLI) & !is.na(local.h2.x)),aes(x=pLI,fill= h2)) + geom_density(alpha=0.5)+theme_bw(20)+ scale_fill_discrete(name=expression("h"^2)) + theme(legend.position=c(0.85,0.85))
+p
+png(filename=fig.dir %&% "pLI-by-h2.png",width=480,height=480)
+p
+dev.off()
+
+kruskal.test(d$pLI~factor(d$h2))
+kruskal.test(d$pLI~factor(d$h2))$p.value
+
+d<-mutate(dgnpLI,enR2=factor(R2>0.1,labels=c('\u2264 0.1','> 0.1'))) 
+p<-ggplot(d %>% filter(!is.na(pLI)),aes(x=pLI,fill= enR2)) + geom_density(alpha=0.5)+theme_bw(20)+ scale_fill_discrete(name=expression("EN R"^2)) + theme(legend.position=c(0.85,0.85))
+p
+png(filename=fig.dir %&% "pLI-by-R2.png",width=480,height=480)
+p
+dev.off()
+p
+ggsave(fig.dir %&% "pLI-by-R2.eps",device=cairo_ps,width=4.8,height=4.8)
+```

@@ -1,0 +1,80 @@
+---
+title: "04_plot_obs_v_sim"
+author: "Heather E. Wheeler"
+date: "`r Sys.time()`"
+output: html_document
+---
+
+```{r, warning=FALSE, message=FALSE}
+library(dplyr)
+library(data.table)
+library(ggplot2)
+library(GGally)
+library(tidyr)
+"%&%" = function(a,b) paste(a,b,sep="")
+pre.dir <- "/Volumes/im-lab/nas40t2/hwheeler/cross-tissue/"
+my.dir <- pre.dir %&% "paper-reviewer-requests/OTD_simulations/"
+obs.dir <- my.dir %&% "obs_otd_exp/"
+sim.dir <- my.dir %&% "lmer.fits/"
+obs.h2.dir <- pre.dir %&% "gtex-h2-estimates/"
+```
+
+See <https://github.com/hwheeler01/GenArch/blob/master/paper-reviewer-requests/OTD_simulations/01_make_sim.r> for how simulated expression phenotypes were generated. See <https://github.com/hwheeler01/GenArch/blob/master/paper-reviewer-requests/OTD_simulations/04_get_gencor_obs_v_sim.R> for how correlations were calculated.
+
+###compare CT sim vs obs
+```{r,  warning=FALSE, message=FALSE}
+allctcor <- fread(my.dir %&% "CT_genecor_obs_v_sim.txt")
+ggplot(allctcor,aes(genecor,color=sim)) + geom_freqpoly() + xlab('Gene correlation (obs v. sim)') + theme_bw()
+
+##rm mult-10 & ct, ts
+notenct <- dplyr::filter(allctcor,sim!="errvar-ct_mult-10" & sim!="errvar-sum_mult-10" & sim!="errvar-ts_mult-10" & sim!="errvar-sum-v2_mult-10" & sim!="errvar-sum-v2_mult-1" & sim!="errvar-sum-v2_mult-2")
+ggplot(notenct,aes(genecor,color=sim)) + geom_freqpoly() + xlab('Gene correlation (obs v. sim)') + theme_bw()
+
+summary(dplyr::filter(notenct,sim=="errvar-sum-v2_mult-1"))
+summary(dplyr::filter(notenct,sim=="errvar-sum-v2_mult-2"))
+```
+
+###compare TS sim vs obs
+```{r, warning=FALSE, message=FALSE,fig.height=10,fig.width=10}
+alltscor <- fread(my.dir %&% "TS_genecor_obs_v_sim.txt")
+ggplot(alltscor,aes(tsgenecor,color=sim)) + geom_freqpoly() + facet_wrap(~tissue) + theme_bw() + xlab('Gene correlation (obs v. sim)')
+
+##rm mult-10
+notents <- dplyr::filter(alltscor,sim!="errvar-ct_mult-10" & sim!="errvar-sum_mult-10" & sim!="errvar-ts_mult-10" & sim!="errvar-sum-v2_mult-10" & sim!="errvar-sum-v2_mult-1" & sim!="errvar-sum-v2_mult-2")
+ggplot(notents,aes(tsgenecor,color=sim)) + geom_freqpoly() + facet_wrap(~tissue) + theme_bw() + xlab('Gene correlation (obs v. sim)')
+```
+
+
+###compare h2 sim vs obs
+```{r, warning=FALSE, message=FALSE, fig.height=10, fig.width=10, eval=TRUE}
+tislist <- scan(my.dir %&% "ten.spaces.tissue.list", "c", sep='\n')
+simlist <- scan(my.dir %&% "simlist", "c")
+slist <- scan(my.dir %&% "shortsimlist", "c")[1:9]
+
+for(tis in tislist){
+  h2obs <- read.table(obs.h2.dir %&% 'GTEx.' %&% tis %&% '.h2.all.models_FHSfdr0.05.Chr1-22_globalOtherChr.2015-10-06.txt', header=T,sep='\t') %>% select(tissue,ensid,gene,local.h2) %>% rename(obs_h2 = local.h2)
+  for(i in 1:length(simlist)){
+    sim <- simlist[i]
+    s <- slist[i]
+    h2sim <- read.table(my.dir %&% 'GTEx.' %&% tis %&% '_' %&% sim %&% '.h2.all.models_FHSfdr0.05.Chr1-22_globalOtherChr.2016-06-22.txt',header=T,sep='\t') %>% select(ensid,local.h2)
+    colnames(h2sim) <- c('ensid',s)
+    if(exists("h2join") == FALSE){
+      h2join <- inner_join(h2obs,h2sim,by='ensid') 
+    }else{
+      h2join <- inner_join(h2join,h2sim,by='ensid')
+    }
+  }
+  if(exists("allh2") == FALSE){
+    allh2 <- h2join
+  }else{
+    allh2 <- rbind(allh2,h2join)
+  }
+  rm("h2join")
+}
+
+gallh2 <- gather(allh2,sim,sim_h2,5:13)
+notengallh2 <- dplyr::filter(gallh2,sim!="errvar-ct_mult-10" & sim!="errvar-sum_mult-10" & sim!="errvar-ts_mult-10")
+
+ggplot(notengallh2,aes(x=sim_h2,y=obs_h2,color=sim)) + geom_smooth() + facet_wrap(~tissue,ncol=3) + theme_bw() + xlab(expression("simulation h"^2)) + ylab(expression("observed h"^2)) + geom_abline(slope=1,intercept=0)
+ggplot(notengallh2,aes(x=sim_h2,y=obs_h2,color=sim)) +geom_point(alpha=1/5) + geom_smooth() + facet_wrap(~tissue,ncol=3) + theme_bw() + xlab("simulation h2") + ylab("observed h2")
+```

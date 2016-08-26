@@ -1,0 +1,81 @@
+---
+title: "03_plot_gcta_v_ldak"
+author: "Heather E. Wheeler"
+date: "`r Sys.time()`"
+output: html_document
+---
+
+```{r, warning=FALSE, message=FALSE}
+library(dplyr)
+library(data.table)
+library(ggplot2)
+library(GGally)
+library(tidyr)
+"%&%" = function(a,b) paste(a,b,sep="")
+pre.dir <- "/Volumes/im-lab/nas40t2/hwheeler/cross-tissue/"
+gcta.dir <- pre.dir %&% "expArch_DGN-WB_imputedGTs/"
+bslmm.dir <- pre.dir %&% "BSLMM_exp/"
+ldak.dir <- pre.dir %&% "paper-reviewer-requests/LDAK/"
+```
+
+###gcta reml-no-constrain
+```{r,fig.width=5,fig.height=5}
+ldak <- fread(ldak.dir %&% "DGN_ldak_reml_chr1-22_2016-06-17.txt")
+gcta <- data.frame(fread(gcta.dir %&% "DGN-WB.h2.all.models_FHSfdr0.05.Chr1-22_globalAll_reml-no-constrain.2015-12-15.txt"))
+gcta <- gcta[,1:7]
+all <- left_join(gcta,ldak,by='gene')
+noc<-ggplot(all,aes(x=local.h2,y=REML_Her)) + geom_point(shape=1) + xlab(expression('GCTA local h'^2)) + ylab(expression('LDAK local h'^2)) + theme_bw(15) +geom_abline(intercept=0, slope=1,color='gray') +  coord_cartesian(xlim=c(-.02,1.02),ylim=c(-.02,1.02))
+noc
+cor.test(all$local.h2,all$REML_Her)
+t.test(all$local.h2,all$REML_Her)
+```
+
+###gcta reml-constrain
+```{r,fig.width=5,fig.height=5}
+ldak <- fread(ldak.dir %&% "DGN_ldak_reml_chr1-22_2016-06-17.txt")
+gcta <- data.frame(fread(gcta.dir %&% "DGN-WB.h2.all.models_FHSfdr0.05.all.Chr1-22.2015-03-11.txt"))
+gcta <- gcta[,1:7]
+all <- left_join(gcta,ldak,by='gene')
+p<-ggplot(all,aes(x=local.h2,y=REML_Her)) + geom_point(shape=1) + xlab(expression('GCTA local h'^2)) + ylab(expression('LDAK local h'^2)) + theme_bw(15) +geom_abline(intercept=0, slope=1,color='red') + geom_smooth(method='lm') + coord_cartesian(xlim=c(-.02,1.02),ylim=c(-.02,1.02)) + ggtitle('GCTA REML constrain') + ggtitle("A")+ theme(plot.title = element_text(hjust = 0)) 
+res<-cor.test(all$local.h2,all$REML_Her)
+a<-p+annotate("text",x=0.9,y=0.05,label=paste("R = ",round(res$estimate,2),sep=""))
+a
+res
+t.test(all$local.h2,all$REML_Her)
+```
+
+###bslmm PVE
+```{r,fig.width=5,fig.height=5}
+ldak <- fread(ldak.dir %&% "DGN_ldak_reml_chr1-22_2016-06-17.txt")
+gcta <- data.frame(fread(bslmm.dir %&% "DGN-WB_exp_BSLMM-s100K_iterations_all_genes_2015-06-14.txt"))
+all <- left_join(gcta,ldak,by='gene')
+p<-ggplot(all,aes(x=pve50,y=REML_Her)) + geom_point(shape=1) + xlab('BSLMM PVE') + ylab(expression('LDAK local h'^2)) + theme_bw(15) +geom_abline(intercept=0, slope=1,color='red') + geom_smooth(method='lm') + coord_cartesian(xlim=c(-.02,1.02),ylim=c(-.02,1.02)) + ggtitle("B")+ theme(plot.title = element_text(hjust = 0)) 
+res<-cor.test(all$pve50,all$REML_Her)
+b<-p+annotate("text",x=0.9,y=0.05,label=paste("R = ",round(res$estimate,2),sep=""))
+b
+res
+```
+
+###Supp Fig
+```{r}
+fig.dir <- '~/GitHub/GenArch/GenArchPaper/Figures/'
+source('/Volumes/im-lab/nas40t2/hwheeler/PrediXcan_CV/GTEx_2014-06013_release/transfers/PrediXmod/Paper_plots/multiplot.R')
+
+png(filename=fig.dir %&% "Fig-LDAK.png",width=960,height=480)
+multiplot(a,b,cols=2)
+dev.off()
+
+setEPS()
+postscript(file=fig.dir %&% "Fig-LDAK.eps",width=9.6,height=4.8)
+multiplot(a,b,cols=2)
+dev.off()
+
+png(filename=fig.dir %&% "Fig-LDAK-gcta-no-cons.png",width=480,height=480)
+noc
+dev.off()
+
+setEPS()
+postscript(file=fig.dir %&% "Fig-LDAK-gcta-no-cons.eps",width=4.8,height=4.8)
+noc
+dev.off()
+```

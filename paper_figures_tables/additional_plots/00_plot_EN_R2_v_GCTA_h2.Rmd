@@ -1,0 +1,165 @@
+---
+title: "00_plot_EN_R2_v_GCTA_h2"
+author: "Heather Wheeler"
+date: "`r Sys.time()`"
+output: html_document
+---
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+  library(ggplot2)
+  library(reshape2)
+  library(dplyr)
+  library(tidyr)
+  library(GGally)
+  library(grid)
+  library(corrplot)
+  "%&%" = function(a,b) paste(a,b,sep="")
+  source('/Volumes/im-lab/nas40t2/hwheeler/cross-tissue/GenArchPaper/multiplot.R')
+  my.dir <- '/Volumes/im-lab/nas40t2/hwheeler/cross-tissue/'
+  fig.dir <- '~/GitHub/GenArch/GenArchPaper/Figures/'
+  my.vol <- '/Volumes/im-lab/nas40t2/hwheeler/cross-tissue/BSLMM_exp/'
+  rna.dir <- my.dir %&% "gtex-rnaseq/"
+  out.dir <- rna.dir %&% "ind-tissues-RPKM/"
+  dgn.dir <- '/Volumes/im-lab/nas40t2/hwheeler/PrediXcan_CV/GTEx_2014-06013_release/transfers/PrediXmod/DGN-WB/DGN-calc-weights/'
+```
+
+###DGN
+```{r,warning=F}
+gcta <- read.table('/Volumes/im-lab/nas40t2/hwheeler/cross-tissue/expArch_DGN-WB_imputedGTs/DGN-WB.h2.all.models_FHSfdr0.05.all.Chr1-22_globalOtherChr.2015-03-18.txt',header=TRUE) %>% dplyr::select(gene,local.h2)
+bslmm <- read.table(my.dir %&% 'DGN-WB_exp_BSLMM-s100K_iterations_all_genes_2015-06-14.txt',header=T)
+alpha50 <- read.table(dgn.dir %&% 'DGN-WB_exp_10-foldCV_elasticNet_alpha0.5_hapmapSnpsCEU_chr1-22_2015-02-02.txt',header=TRUE) %>% dplyr::select(gene,R2)
+all <- inner_join(gcta,alpha50,by='gene')
+all <- inner_join(all,bslmm,by='gene')
+all <- all[complete.cases(all),]
+ggplot(all,aes(x=local.h2,y=pve50,color=R2)) + geom_point() +coord_cartesian(xlim=c(-0.01,1.01),ylim=c(-0.01,1.01)) + theme_bw() +xlab(expression("GCTA h"^2))+ylab('BSLMM PVE')+geom_abline(intercept=0,slope=1) + scale_colour_gradient(low="pink",high="blue",name=expression("elastic net R"^2)) 
+cor.test(all$local.h2,all$R2)
+cor.test(all$local.h2,all$pve50)
+cor.test(all$pve50,all$R2)
+```
+
+###GTEx TW
+```{r,fig.height=10,fig.width=11,warning=F}
+tislist <- scan('/Volumes/im-lab/nas40t2/hwheeler/cross-tissue/nine.tissue.list',sep="\n",what="character")
+tw <- data.frame()
+rvec<-vector()
+nvec<-vector()
+rvec2<-vector()
+rvec3<-vector()
+for(i in 1:length(tislist)){
+  tis <- tislist[i]
+  bs <- read.table(my.vol %&% tislist[i] %&% '_TW_exp_BSLMM-s100K_iterations_all_chr1-22_2015-10-18.txt',header=T,sep="\t") %>% dplyr::select(gene,pve50) %>% rename(ensid=gene)
+  h2 <- read.table("/Volumes/im-lab/nas40t2/hwheeler/cross-tissue/gtex-h2-estimates/GTEx.tissue-wide.h2_" %&% tislist[i] %&% "_marginal.local_2015-03-24.txt",header=T, sep="\t") %>% dplyr::select(tissue,ensid,gene,h2,N)
+  alpha50 <- read.table(my.dir %&% 'gtex-OTD-CV-R2/TW_' %&% tis %&% '_exp_10-foldCV_elasticNet_alpha0.5_hapmapSnpsCEU_all_chr1-22_2015-09-10.txt',header=TRUE) %>%dplyr::select(gene,R2)
+  explist <- scan(out.dir %&% tis %&% ".meanRPKMgt0.1_3samplesRPKMgt0_genelist","c")
+  h2 <- dplyr::filter(h2,ensid %in% explist)
+  subdata <- inner_join(h2,bs,by="ensid")
+  subdata <- inner_join(subdata,alpha50,by='gene')
+  subdata <- subdata[complete.cases(subdata),] #uncomment to remove gray points 
+  print(dim(subdata))
+  res<-cor.test(subdata$pve50,subdata$h2)
+  cat(tislist[i],"\tPearson R (PVE v h2)=",round(res$estimate,3),"\tP-value=",res$p.value,"\n")
+  rvec <- cbind(rvec,unname(round(res$estimate,3)))
+  res2<-cor.test(subdata$R2,subdata$h2)
+  cat(tislist[i],"\tPearson R (EN R2 v h2)=",round(res2$estimate,3),"\tP-value=",res2$p.value,"\n")
+  rvec2 <- cbind(rvec2,unname(round(res2$estimate,3)))
+  res3<-cor.test(subdata$R2,subdata$pve50)
+  cat(tislist[i],"\tPearson R (EN R2 v PVE)=",round(res3$estimate,3),"\tP-value=",res2$p.value,"\n")
+  rvec3 <- cbind(rvec3,unname(round(res3$estimate,3)))
+  nvec <- cbind(nvec,h2$N[1])
+  tw <- rbind(tw,subdata)
+}
+
+
+##plot R2 vs. h2
+p<-ggplot(tw,aes(x=h2,y=pve50,color=R2))+geom_point(alpha=0.4)+coord_cartesian(xlim=c(-0.05,1.05),ylim=c(-0.05,1.05))+xlab(expression("GCTA h"^2))+ylab('BSLMM PVE')+geom_abline(intercept=0,slope=1) + scale_colour_gradient(low="pink",high="blue",name=expression("elastic net R"^2)) + facet_wrap(~tissue,ncol=3)+theme_bw()
+
+ann_text <- data.frame( h2 = rep(0.75,9), pve50 = rep(0.05,9), R= rvec[1:9], tissue = factor(tislist), ensid=rep(0.9,9),gene=rep(0.9,9))
+p2<-p+geom_text(data=ann_text,aes(label=paste("R==",R,sep="")),color="black",show.legend=F,parse=T,hjust=0,size=3)
+p2
+png(filename=fig.dir %&% "Fig-GTEx_TW_colorEN0.5R2_pve_v_h2.png",width=700,height=600)
+p2
+dev.off()
+```
+
+### Color by Price h2
+```{r}
+h2.dir <- '/Volumes/im-lab/nas40t2/Data/Annotations/heritability/'
+price <- read.table(h2.dir %&% "Alkes/h2all.txt",header=TRUE) %>% dplyr::rename(gene=gname)
+tislist <- scan('/Volumes/im-lab/nas40t2/hwheeler/cross-tissue/nine.tissue.list',sep="\n",what="character")
+tw <- data.frame()
+rvec<-vector()
+rvec2<-vector()
+for(i in 1:length(tislist)){
+  tis <- tislist[i]
+  bs <- read.table(my.vol %&% tislist[i] %&% '_TW_exp_BSLMM-s100K_iterations_all_chr1-22_2015-10-18.txt',header=T,sep="\t") %>% dplyr::select(gene,pve50) %>% rename(ensid=gene)
+  h2 <- read.table("/Volumes/im-lab/nas40t2/hwheeler/cross-tissue/gtex-h2-estimates/GTEx.tissue-wide.h2_" %&% tislist[i] %&% "_marginal.local_2015-03-24.txt",header=T, sep="\t") %>% dplyr::select(tissue,ensid,gene,h2,N)
+  alpha1 <- read.table(my.dir %&% 'gtex-OTD-CV-R2/TW_' %&% tis %&% '_exp_10-foldCV_elasticNet_alpha1_hapmapSnpsCEU_all_chr1-22_2015-09-10.txt',header=TRUE) %>%dplyr::select(gene,R2)
+  explist <- scan(out.dir %&% tis %&% ".meanRPKMgt0.1_3samplesRPKMgt0_genelist","c")
+  h2 <- dplyr::filter(h2,ensid %in% explist)
+  subdata <- inner_join(h2,bs,by="ensid")
+  subdata <- inner_join(subdata,alpha1,by='gene')
+  subdata <- subdata[complete.cases(subdata),] #uncomment to remove gray points 
+  subdata <- left_join(subdata,price,by='gene')
+  print(dim(subdata))
+  res<-cor.test(subdata$h2bloodcis,subdata$h2)
+  cat(tislist[i],"\tPearson R (IBD v h2)=",round(res$estimate,3),"\tP-value=",res$p.value,"\n")
+  rvec <- cbind(rvec,unname(round(res$estimate,2)))
+  res2<-cor.test(subdata$h2bloodcis,subdata$pve50)
+  cat(tislist[i],"\tPearson R (IBD v PVE)=",round(res2$estimate,3),"\tP-value=",res2$p.value,"\n")
+  rvec2 <- cbind(rvec2,unname(round(res2$estimate,2)))
+  tw <- rbind(tw,subdata)
+}
+
+p=ggplot(tw[complete.cases(tw),],aes(x=h2,y=pve50,color=h2bloodcis))+geom_point()+coord_cartesian(xlim=c(-0.05,1.05),ylim=c(-0.05,1.05))+xlab(expression("GCTA h"^2))+ylab('BSLMM PVE')+geom_abline(intercept=0,slope=1) + scale_colour_gradient(low="pink",high="blue",name=expression("IBD h"^2)) + facet_wrap(~tissue,ncol=3)+theme_bw()
+
+ann_text <- data.frame( h2 = rep(1.08,9), pve50 = rep(0.05,9), R= rvec2[1:9], tissue = factor(tislist), ensid=rep(0.9,9),gene=rep(0.9,9))
+ann_text2 <- data.frame( h2 = rep(1.08,9), pve50 = rep(-0.05,9), R= rvec[1:9], tissue = factor(tislist), ensid=rep(0.9,9),gene=rep(0.9,9))
+p2<-p+geom_text(data=ann_text,aes(label=paste("IBD_v_BSLMM:",R,sep=" ")),color="black",show.legend=F,parse=T,hjust=1,size=3)
+p3<-p2+geom_text(data=ann_text2,aes(label=paste("IBD_v_LMM:",R,sep=" ")),color="black",show.legend=F,parse=T,hjust=1,size=3)
+p3
+
+png(filename=fig.dir %&% "Fig-GTEx_TW_colorPriceh2bloodcis_pve_v_h2.png",width=700,height=600)
+p3
+dev.off()
+```
+### R vs. N
+```{r,fig.width=5,fig.height=5}
+##plot R (PVE vs. h2) vs. N
+n<-c(nvec, 922)
+R<-c(rvec,0.954)
+nvr <- data.frame(n,R)
+p<-ggplot(nvr,aes(x=n,y=R)) + geom_point() + geom_smooth(method="lm") + theme_bw(15) + ylab(expression("Correlation between BSLMM PVE and GCTA h"^2))
+p
+cor.test(n,R)
+setEPS()
+postscript(file=fig.dir %&% "Fig-R_gcta_bslmm_v_n.eps",width=4,height=4)
+p
+dev.off()
+
+png(filename=fig.dir %&% "Fig-R_gcta_bslmm_v_n.png",width=360,height=360)
+p
+dev.off()
+
+
+cor.test(nvr$R,nvr$n)
+ggplot(nvr[1:9,],aes(x=n,y=R)) + geom_point() + geom_smooth(method="lm") + theme_bw() + ylab("R (BSLMM PVE v. GCTA h2)")
+cor.test(nvr[1:9,]$R,nvr[1:9,]$n)
+
+##plot R (EN R2 vs. h2) vs. N
+n<-c(nvec, 922)
+R<-c(rvec2,0.938)
+nvr <- data.frame(n,R)
+ggplot(nvr,aes(x=n,y=R)) + geom_point() + geom_smooth(method="lm") + theme_bw() + ylab("R (EN R2 v. GCTA h2)")
+cor.test(nvr$R,nvr$n)
+ggplot(nvr[1:9,],aes(x=n,y=R)) + geom_point() + geom_smooth(method="lm") + theme_bw() + ylab("R (EN R2 v. GCTA h2)")
+cor.test(nvr[1:9,]$R,nvr[1:9,]$n)
+
+##plot R (EN R2 vs. PVE) vs. N
+n<-c(nvec, 922)
+R<-c(rvec3,0.986)
+nvr <- data.frame(n,R)
+ggplot(nvr,aes(x=n,y=R)) + geom_point() + geom_smooth(method="lm") + theme_bw() + ylab("R (EN R2 v. BSLMM PVE)")
+cor.test(nvr$R,nvr$n)
+ggplot(nvr[1:9,],aes(x=n,y=R)) + geom_point() + geom_smooth(method="lm") + theme_bw() + ylab("R (EN R2 v. BSLMM PVE)")
+cor.test(nvr[1:9,]$R,nvr[1:9,]$n)
+```
